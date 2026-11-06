@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D 세포소기관 크리켓 (Cellular Organelle Cricket)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Noto+Sans+KR:wght@400;600;800&display=swap');
+        
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background-color: #03030c;
+            color: #ffffff;
+            overflow: hidden;
+            touch-action: manipulation;
+        }
+
+        .font-orbitron { font-family: 'Orbitron', sans-serif; }
+        canvas { display: block; width: 100%; height: 100%; }
+
+        .glow-atp { text-shadow: 0 0 12px rgba(255, 140, 0, 0.9), 0 0 25px rgba(255, 60, 0, 0.6); }
+        .glow-purple { text-shadow: 0 0 12px rgba(210, 80, 255, 0.9), 0 0 25px rgba(140, 0, 255, 0.6); }
+
+        .btn-organelle {
+            background: linear-gradient(135deg, #ff6b00 0%, #d800ff 50%, #00e5ff 100%);
+            transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .btn-organelle:hover {
+            transform: scale(1.06);
+            box-shadow: 0 0 30px rgba(255, 100, 255, 0.8);
+        }
+        .btn-organelle:active { transform: scale(0.96); }
+    </style>
+</head>
+<body class="w-screen h-screen flex flex-col justify-between items-center select-none bg-slate-950">
+
+    <!-- Header / Organelle HUD -->
+    <header class="w-full max-w-5xl px-4 py-3 flex justify-between items-center z-10 bg-slate-900/80 backdrop-blur-md rounded-b-2xl border-b border-cyan-500/30 shadow-2xl">
+        <div class="flex items-center space-x-3">
+            <div id="organelle-avatar" class="w-11 h-11 rounded-full bg-gradient-to-tr from-orange-500 via-purple-600 to-cyan-400 p-0.5 shadow-[0_0_15px_rgba(255,120,0,0.6)] animate-pulse">
+                <div class="w-full h-full bg-slate-950 rounded-full flex items-center justify-center text-xl">🧬</div>
+            </div>
+            <div>
+                <h1 class="text-lg font-black font-orbitron tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-cyan-300 to-purple-400">
+                    ORGANELLE CRICKET
+                </h1>
+                <p class="text-[11px] text-slate-300 flex items-center gap-1.5 font-medium">
+                    <span id="atp-status-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                        ⚡ ATP CHARGED
+                    </span>
+                </p>
+            </div>
+        </div>
+
+        <!-- Score, Balls & Wickets HUD -->
+        <div class="flex items-center space-x-4 font-orbitron">
+            <div class="text-center">
+                <p class="text-[9px] text-slate-400 tracking-widest font-semibold">ATP RUNS</p>
+                <p id="score-display" class="text-3xl font-black text-amber-400 glow-atp">0</p>
+            </div>
+            <div class="h-8 w-[1px] bg-slate-800"></div>
+
+            <div class="flex flex-col items-center justify-center px-1">
+                <p class="text-[9px] text-slate-400 tracking-widest font-semibold mb-1">BASES</p>
+                <div class="relative w-8 h-8 flex items-center justify-center">
+                    <div id="base-2" class="absolute top-0 w-2.5 h-2.5 rotate-45 border border-cyan-500/40 bg-slate-900 transition-all duration-300"></div>
+                    <div id="base-3" class="absolute left-0 w-2.5 h-2.5 rotate-45 border border-cyan-500/40 bg-slate-900 transition-all duration-300"></div>
+                    <div id="base-1" class="absolute right-0 w-2.5 h-2.5 rotate-45 border border-cyan-500/40 bg-slate-900 transition-all duration-300"></div>
+                </div>
+            </div>
+
+            <div class="h-8 w-[1px] bg-slate-800"></div>
+            <div class="text-center">
+                <p class="text-[9px] text-slate-400 tracking-widest font-semibold">BALLS</p>
+                <p id="balls-display" class="text-2xl font-bold text-emerald-400">0 <span class="text-xs text-slate-600">/ 4</span></p>
+            </div>
+            <div class="h-8 w-[1px] bg-slate-800"></div>
+            <div class="text-center">
+                <p class="text-[9px] text-slate-400 tracking-widest font-semibold">OUTS</p>
+                <p id="wickets-display" class="text-2xl font-bold text-pink-500">0 <span class="text-xs text-slate-600">/ 3</span></p>
+            </div>
+            <div class="h-8 w-[1px] bg-slate-800 hidden sm:block"></div>
+            <div class="text-center hidden sm:block">
+                <p class="text-[9px] text-slate-400 tracking-widest font-semibold">RECORD</p>
+                <p id="highscore-display" class="text-2xl font-bold text-cyan-400">0</p>
+            </div>
+        </div>
+    </header>
+
+    <!-- Game Canvas Layer -->
+    <main id="canvas-container" class="relative w-full flex-1 flex justify-center items-center overflow-hidden cursor-pointer">
+        <canvas id="gameCanvas"></canvas>
+
+        <!-- Pitcher Cell Organelle Badge -->
+        <div class="absolute top-4 left-5 pointer-events-none flex flex-col gap-2 z-10">
+            <div class="bg-slate-900/85 backdrop-blur-md px-3.5 py-2 rounded-xl border border-orange-500/40 text-xs shadow-lg">
+                <span class="text-slate-400">투구 소기관: </span>
+                <span id="pitcher-organelle-name" class="font-bold text-amber-300 font-orbitron">⚡ 미토콘드리아</span>
+            </div>
+            <div class="bg-slate-900/85 backdrop-blur-md px-3.5 py-2 rounded-xl border border-cyan-500/40 text-xs shadow-lg">
+                <span class="text-slate-400">구종: </span>
+                <span id="pitch-type-name" class="font-bold text-cyan-300">ATP 미사일 (직구)</span>
+            </div>
+        </div>
+
+        <!-- Hit Feedback Overlay -->
+        <div id="hit-feedback" class="absolute inset-0 flex items-center justify-center pointer-events-none opacity-0 transition-opacity duration-300 z-10">
+            <h2 id="feedback-text" class="text-5xl md:text-8xl font-black font-orbitron tracking-wider text-amber-300 italic drop-shadow-[0_0_35px_rgba(255,180,0,0.9)] transform -rotate-3">
+                홈런!
+            </h2>
+        </div>
+
+        <!-- Quiz Modal Overlay -->
+        <div id="quiz-modal" class="absolute inset-0 bg-slate-950/90 backdrop-blur-lg flex flex-col items-center justify-center p-6 text-center z-30 hidden">
+            <div class="bg-slate-900/90 border-2 border-amber-400 p-6 md:p-8 rounded-2xl max-w-lg w-full shadow-[0_0_40px_rgba(255,200,0,0.4)] text-left">
+                <div class="flex items-center gap-2 mb-3">
+                    <span class="px-2.5 py-1 rounded-md text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 font-orbitron">SPECIAL QUIZ</span>
+                    <span id="quiz-category" class="text-xs text-slate-400">세포소기관 심화 학습</span>
+                </div>
+                <h3 id="quiz-question" class="text-lg md:text-xl font-bold text-slate-100 mb-5 leading-relaxed">
+                    퀴즈 질문이 들어갑니다.
+                </h3>
+                <div id="quiz-options" class="space-y-3 mb-5">
+                    <!-- 선택지 버튼 동적 생성 -->
+                </div>
+                <div id="quiz-explanation" class="hidden p-4 rounded-xl bg-slate-950/80 border border-cyan-500/30 text-xs md:text-sm leading-relaxed mb-4">
+                    <!-- 해설 표기 -->
+                </div>
+                <button id="quiz-next-btn" class="hidden btn-organelle w-full py-3 rounded-xl font-bold text-slate-950 font-orbitron">
+                    NEXT PITCH →
+                </button>
+            </div>
+        </div>
+
+        <!-- Start Overlay Screen -->
+        <div id="start-overlay" class="absolute inset-0 bg-slate-950/90 backdrop-blur-lg flex flex-col items-center justify-center p-6 text-center z-20">
+            <div class="w-24 h-24 mb-5 rounded-full bg-gradient-to-tr from-amber-500 via-purple-600 to-cyan-400 p-1 shadow-[0_0_40px_rgba(255,140,0,0.5)] animate-bounce">
+                <div class="w-full h-full bg-slate-950 rounded-full flex items-center justify-center text-4xl">🧬</div>
+            </div>
+            <h2 class="text-3xl md:text-5xl font-black font-orbitron text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-cyan-300 to-purple-400 mb-3 tracking-wide">
+                세포소기관 크리켓
+            </h2>
+            <p class="text-sm md:text-base text-slate-300 max-w-md mb-6 leading-relaxed">
+                마구 타격과 <strong class="text-amber-300">세포소기관 퀴즈</strong>를 풀어 ATP 에너지를 획득하세요!<br/>
+                클릭 또는 <kbd class="px-2 py-0.5 bg-slate-800 rounded text-amber-400 font-mono text-xs">SPACE BAR</kbd>로 타격합니다.
+            </p>
+            <button id="start-btn" class="btn-organelle px-9 py-4 rounded-2xl font-black font-orbitron text-slate-950 tracking-wider text-lg shadow-2xl">
+                START CELL MATCH
+            </button>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="gameover-overlay" class="absolute inset-0 bg-slate-950/92 backdrop-blur-lg flex flex-col items-center justify-center p-6 text-center z-20 hidden">
+            <div class="w-16 h-16 mb-3 rounded-full bg-pink-500/20 border border-pink-500/50 flex items-center justify-center text-2xl shadow-[0_0_25px_rgba(255,0,128,0.5)]">☣️</div>
+            <h2 class="text-4xl md:text-6xl font-black font-orbitron text-pink-500 mb-2 glow-purple">CELLULAR OUT</h2>
+            <p class="text-slate-400 mb-6 text-sm">3번의 아웃으로 세포 에너지가 소진되었습니다.</p>
+            <div class="bg-slate-900/90 border border-slate-800 p-6 rounded-2xl w-full max-w-xs mb-8 space-y-3 font-orbitron shadow-2xl">
+                <div class="flex justify-between items-center text-slate-400 text-sm">
+                    <span>FINAL ATP RUNS</span>
+                    <span id="final-score" class="text-3xl font-black text-amber-400">0</span>
+                </div>
+                <div class="flex justify-between items-center text-slate-400 text-sm border-t border-slate-800 pt-3">
+                    <span>BEST RECORD</span>
+                    <span id="final-highscore" class="text-xl font-bold text-cyan-400">0</span>
+                </div>
+            </div>
+            <button id="restart-btn" class="btn-organelle px-9 py-4 rounded-2xl font-black font-orbitron text-slate-950 tracking-wider text-lg">REGENERATE CELL</button>
+        </div>
+    </main>
+
+    <footer class="w-full max-w-5xl px-4 py-2.5 flex justify-between items-center text-xs text-slate-400 border-t border-slate-800/80 bg-slate-950">
+        <div>조작: <span class="text-cyan-400 font-semibold">화면 클릭</span> / <span class="text-amber-400 font-semibold">스페이스바</span></div>
+        <div class="hidden sm:block">골든 바이오 공 타격 시 <span class="text-amber-300 font-semibold">세포소기관 학술 퀴즈</span> 출제</div>
+    </footer>
+
+    <script>
+        class OrganelleAudio {
+            constructor() { this.ctx = null; }
+            init() {
+                if (!this.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioContext();
+                }
+                if (this.ctx.state === 'suspended') this.ctx.resume();
+            }
+            playSwing() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator(), gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(500, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.35, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+                osc.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(); osc.stop(this.ctx.currentTime + 0.15);
+            }
+            playHit(isHomerun = false) {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator(), gain = this.ctx.createGain();
+                osc.type = isHomerun ? 'triangle' : 'square';
+                osc.frequency.setValueAtTime(isHomerun ? 900 : 550, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(isHomerun ? 1400 : 220, this.ctx.currentTime + 0.3);
+                gain.gain.setValueAtTime(0.6, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.35);
+                osc.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(); osc.stop(this.ctx.currentTime + 0.35);
+            }
+            playStrike() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator(), gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(180, this.ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(50, this.ctx.currentTime + 0.35);
+                gain.gain.setValueAtTime(0.4, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.35);
+                osc.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(); osc.stop(this.ctx.currentTime + 0.35);
+            }
+            playBall() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator(), gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(320, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(480, this.ctx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.2);
+                osc.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(); osc.stop(this.ctx.currentTime + 0.2);
+            }
+            playRunScore() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator(), gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(523.25, this.ctx.currentTime);
+                osc.frequency.setValueAtTime(659.25, this.ctx.currentTime + 0.08);
+                osc.frequency.setValueAtTime(783.99, this.ctx.currentTime + 0.16);
+                gain.gain.setValueAtTime(0.4, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+                osc.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(); osc.stop(this.ctx.currentTime + 0.3);
+            }
+        }
+
+        const sound = new OrganelleAudio();
+
+        const QUIZ_DATABASE = [
+            {
+                question: "마이토콘드리아의 크리스타(내막) 구조와 기능에 대한 설명으로 옳은 것은?",
+                options: [
+                    "내막이 주름진 크리스타 구조를 형성하여 물질 수송 표면적을 최소화한다.",
+                    "내막의 넓은 표면적에 전자전달계 효소가 배치되어 효율적으로 ATP를 합성한다.",
+                    "바탕질에서 포도당이 직접 합성되는 세포호흡 핵심 반응이 일어난다.",
+                    "단백질을 가공하여 소낭에 담아 세포 외부로 분비한다."
+                ],
+                answer: 1,
+                explanation: "💡 **정답 해설**: 마이토콘드리아 내막은 안쪽으로 접혀 '크리스타'를 형성합니다. 이는 표면적을 넓혀 전자전달계와 ATP 합성효소를 다량 배치함으로써 세포 호흡 효율을 극대화합니다."
+            },
+            {
+                question: "엽록체의 타이라코이드 막과 스트로마의 구조-기능 매칭으로 옳게 연결된 것은?",
+                options: [
+                    "타이라코이드 막 - 명반응(ATP, NADPH 생성) / 스트로마 - 암반응(포도당 합성)",
+                    "타이라코이드 막 - 캘빈회로 / 스트로마 - 엽록소의 빛에너지 포착",
+                    "타이라코이드 막 - 가수분해 효소 작용 / 스트로마 - 세포호흡 주반응",
+                    "타이라코이드 막 - 유전정보 저장 / 스트로마 - 단백질 리보솜 합성"
+                ],
+                answer: 0,
+                explanation: "💡 **정답 해설**: '타이라코이드 막'에서 빛을 흡수해 명반응이 일어나며, 기질 부분인 '스트로마'에서 이산화탄소를 포도당으로 합성(암반응)합니다."
+            },
+            {
+                question: "단백질 합성 및 분해 과정에서 여러 세포소기관의 '유기적 협력 관계'를 올바르게 설명한 것은?",
+                options: [
+                    "핵(DNA)의 정보 -> 리보솜(합성) -> 소포체(가공·이동) -> 골지체(수송·분비)",
+                    "마이토콘드리아(단백질 생성) -> 엽록체(분비) -> 중심체(가공)",
+                    "라이소솜(단백질 합성) -> 리보솜(포장) -> 골지체(배출)",
+                    "세포벽(정보 제공) -> 액포(합성) -> 미세관(가공)"
+                ],
+                answer: 0,
+                explanation: "💡 **정답 해설**: 핵의 DNA 정보를 바탕으로 리보솜이 단백질을 합성하면, 소포체가 가공·수송하고, 골지체가 최종 포장하여 세포 밖 분비나 라이소솜으로 이동시키는 유기적 분업 체계를 갖습니다."
+            }
+        ];
+
+        // ⚾ [정확한 야구 다이아몬드 베이스 3D 좌표 배치]
+        // 홈: (0, 0, 70)
+        // 1루: (380, 0, 600)  <- 오른쪽 전방 (넓은 화면 활용)
+        // 2루: (0, 0, 1150)   <- 투수 마운드 뒤쪽 까마득한 중앙 외야
+        // 3루: (-380, 0, 600) <- 왼쪽 전방 (넓은 화면 활용)
+        // 투수 마운드: (0, 0, 580) <- 1루-2루-3루-홈의 중심 위치
+        const PITCHER_DISTANCE_Z = 580;
+
+        const BASE_POSITIONS = [
+            { x: 0, y: 0, z: 70 },       // Base 0: Home Plate
+            { x: 380, y: 0, z: 600 },    // Base 1: 1st Base
+            { x: 0, y: 0, z: 1150 },     // Base 2: 2nd Base
+            { x: -380, y: 0, z: 600 }    // Base 3: 3rd Base
+        ];
+
+        const PITCH_TYPES = [
+            { name: "ATP 미사일 (직구)", speed: 1.15, curveX: 0, isStrike: true, organelle: "⚡ 미토콘드리아", color: "#ff6600", shadowColor: "rgba(255,102,0,0.8)", tailColor: "rgba(255,180,0,0.4)" },
+            { name: "엽록체 광합성 (커브)", speed: 0.95, curveX: 250, isStrike: false, organelle: "🌿 엽록체", color: "#32ff7e", shadowColor: "rgba(50,255,126,0.8)", tailColor: "rgba(0,230,100,0.4)" },
+            { name: "라이소솜 분해 (슬라이더)", speed: 1.00, curveX: -220, isStrike: true, organelle: "💥 라이소솜", color: "#d250ff", shadowColor: "rgba(210,80,255,0.8)", tailColor: "rgba(160,0,255,0.4)" },
+            { name: "골지체 수송 (체인지업)", speed: 0.72, curveX: 80, isStrike: false, organelle: "📦 골지체", color: "#00e5ff", shadowColor: "rgba(0,229,255,0.8)", tailColor: "rgba(0,180,220,0.4)" },
+            { name: "✨ 골든 바이오 (퀴즈 볼)", speed: 0.88, curveX: 0, isStrike: true, organelle: "🧬 핵·소소기관 협력", color: "#ffd700", shadowColor: "rgba(255,215,0,0.9)", tailColor: "rgba(255,255,150,0.6)", isQuiz: true }
+        ];
+
+        let canvas, ctx, dpr = 1;
+        let gameState = 'START';
+        let score = 0, wickets = 0, ballsCount = 0;
+        let highScore = localStorage.getItem('cell_cricket_hi') || 0;
+        
+        // [1루, 2루, 3루 점유 여부]
+        let bases = [false, false, false];
+
+        class ActiveRunner {
+            constructor(startBaseIndex, targetBaseIndex) {
+                this.currentBase = startBaseIndex;
+                this.targetBase = targetBaseIndex;
+                this.progress = 0;
+                this.speed = 0.025;
+                this.completed = false;
+                this.isScoring = (targetBaseIndex >= 4);
+            }
+            update() {
+                if (this.completed) return;
+                this.progress += this.speed;
+                if (this.progress >= 1) {
+                    this.progress = 1;
+                    this.completed = true;
+                    if (this.isScoring) {
+                        score += 1;
+                        sound.playRunScore();
+                        createScorePopup("+1 ATP!");
+                        updateHUD();
+                    }
+                }
+            }
+            get3DPosition() {
+                const startPos = BASE_POSITIONS[this.currentBase % 4];
+                const endPos = BASE_POSITIONS[this.targetBase % 4];
+                return {
+                    x: startPos.x + (endPos.x - startPos.x) * this.progress,
+                    y: startPos.y + (endPos.y - startPos.y) * this.progress,
+                    z: startPos.z + (endPos.z - startPos.z) * this.progress
+                };
+            }
+        }
+
+        let activeRunners = [], scorePopups = [], particles = [], microfilaments = [];
+        let currentPitch = PITCH_TYPES[0];
+        let ball = { progress: 0, x: 0, y: 0, z: 0, speed: 0.011, active: false, hit: false, hitVX: 0, hitVY: 0, hitVZ: 0, trail: [] };
+        let bat = { angle: 0, isSwinging: false, swingProgress: 0 };
+
+        const scoreEl = document.getElementById('score-display');
+        const ballsEl = document.getElementById('balls-display');
+        const wicketsEl = document.getElementById('wickets-display');
+        const highScoreEl = document.getElementById('highscore-display');
+        const base1El = document.getElementById('base-1');
+        const base2El = document.getElementById('base-2');
+        const base3El = document.getElementById('base-3');
+        const pitcherOrganelleEl = document.getElementById('pitcher-organelle-name');
+        const pitchTypeEl = document.getElementById('pitch-type-name');
+        const hitFeedbackEl = document.getElementById('hit-feedback');
+        const feedbackTextEl = document.getElementById('feedback-text');
+        const startOverlay = document.getElementById('start-overlay');
+        const gameoverOverlay = document.getElementById('gameover-overlay');
+        const finalScoreEl = document.getElementById('final-score');
+        const finalHighscoreEl = document.getElementById('final-highscore');
+        const quizModal = document.getElementById('quiz-modal');
+
+        function initCanvas() {
+            canvas = document.getElementById('gameCanvas');
+            ctx = canvas.getContext('2d');
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+            initBackgroundCellularElements();
+        }
+
+        function resizeCanvas() {
+            const container = document.getElementById('canvas-container');
+            dpr = window.devicePixelRatio || 1;
+            canvas.width = container.clientWidth * dpr;
+            canvas.height = container.clientHeight * dpr;
+            ctx.scale(dpr, dpr);
+        }
+
+        function getWidth() { return canvas.width / dpr; }
+        function getHeight() { return canvas.height / dpr; }
+
+        function initBackgroundCellularElements() {
+            microfilaments = [];
+            for (let i = 0; i < 35; i++) {
+                microfilaments.push({
+                    x1: Math.random() * 1000, y1: Math.random() * 800,
+                    x2: Math.random() * 1000, y2: Math.random() * 800,
+                    alpha: 0.08 + Math.random() * 0.12, speed: 0.2 + Math.random() * 0.3
+                });
+            }
+        }
+
+        function project3D(x, y, z) {
+            const width = getWidth(), height = getHeight();
+            const horizonY = height * 0.32;
+            const perspective = 520 / (520 + z);
+            return { x: width / 2 + x * perspective, y: horizonY + (height * 0.58 - y) * perspective, scale: perspective };
+        }
+
+        window.onload = () => {
+            initCanvas();
+            highScoreEl.innerText = highScore;
+            document.getElementById('start-btn').addEventListener('click', startGame);
+            document.getElementById('restart-btn').addEventListener('click', startGame);
+            
+            const container = document.getElementById('canvas-container');
+            container.addEventListener('pointerdown', handleUserSwing);
+            window.addEventListener('keydown', (e) => {
+                if (e.code === 'Space') { e.preventDefault(); handleUserSwing(); }
+            });
+            requestAnimationFrame(gameLoop);
+        };
+
+        function startGame() {
+            sound.init();
+            score = 0; wickets = 0; ballsCount = 0;
+            bases = [false, false, false];
+            activeRunners = []; scorePopups = [];
+            updateHUD();
+            startOverlay.classList.add('hidden');
+            gameoverOverlay.classList.add('hidden');
+            prepareNextPitch();
+        }
+
+        function prepareNextPitch() {
+            if (wickets >= 3) { endGame(); return; }
+
+            const rand = Math.random();
+            if (rand < 0.25) {
+                currentPitch = PITCH_TYPES[4];
+            } else {
+                currentPitch = PITCH_TYPES[Math.floor(Math.random() * 4)];
+            }
+
+            pitcherOrganelleEl.innerText = currentPitch.organelle;
+            pitchTypeEl.innerText = currentPitch.name;
+
+            ball.progress = 0; ball.x = 0; ball.y = 110; ball.z = PITCHER_DISTANCE_Z;
+            ball.speed = (0.010 + Math.random() * 0.003) * currentPitch.speed;
+            ball.hit = false; ball.active = true; ball.trail = [];
+            bat.isSwinging = false; bat.swingProgress = 0;
+
+            gameState = 'PITCHING';
+        }
+
+        function handleUserSwing() {
+            if (gameState !== 'PITCHING' || bat.isSwinging) return;
+
+            sound.playSwing();
+            bat.isSwinging = true; bat.swingProgress = 0;
+
+            const ballTargetZ = 70;
+            const ballDist = ball.z - ballTargetZ;
+
+            if (ball.active && Math.abs(ballDist) < 180) {
+                ball.hit = true;
+                ball.active = false;
+                evaluateHitTiming(ballDist);
+            }
+        }
+
+        function evaluateHitTiming(dist) {
+            const absDist = Math.abs(dist);
+            let text = "", hitType = 0;
+
+            if (absDist < 30) {
+                hitType = 4; text = "홈런! (HOMERUN)"; sound.playHit(true);
+                createOrganelleExplosion(getWidth() / 2, getHeight() * 0.78, 50, currentPitch.color);
+                
+                ball.hitVX = (Math.random() - 0.5) * 45;
+                ball.hitVY = 34 + Math.random() * 18;
+                ball.hitVZ = 95 + Math.random() * 30;
+
+            } else if (absDist < 60) {
+                hitType = 3; text = "3루타! (TRIPLE)"; sound.playHit(false);
+                createOrganelleExplosion(getWidth() / 2, getHeight() * 0.78, 35, '#ff00ff');
+                
+                ball.hitVX = (Math.random() > 0.5 ? 1 : -1) * (35 + Math.random() * 15);
+                ball.hitVY = 24 + Math.random() * 12;
+                ball.hitVZ = 75 + Math.random() * 20;
+
+            } else if (absDist < 95) {
+                hitType = 2; text = "2루타! (DOUBLE)"; sound.playHit(false);
+                createOrganelleExplosion(getWidth() / 2, getHeight() * 0.78, 25, '#00e5ff');
+                
+                ball.hitVX = (Math.random() - 0.5) * 35;
+                ball.hitVY = 20 + Math.random() * 10;
+                ball.hitVZ = 60 + Math.random() * 15;
+
+            } else if (absDist < 140) {
+                hitType = 1; text = "단타! (SINGLE)"; sound.playHit(false);
+                createOrganelleExplosion(getWidth() / 2, getHeight() * 0.78, 18, '#ffffff');
+                
+                ball.hitVX = (Math.random() - 0.5) * 25;
+                ball.hitVY = 14 + Math.random() * 8;
+                ball.hitVZ = 45 + Math.random() * 12;
+
+            } else {
+                registerStrike("스트라이크!");
+                return;
+            }
+
+            advanceRunners(hitType);
+            updateHUD();
+            showFeedback(text, hitType === 4 ? 'text-amber-300' : 'text-cyan-300');
+
+            if (currentPitch.isQuiz) {
+                setTimeout(triggerQuizModal, 1400);
+            } else {
+                setTimeout(prepareNextPitch, 2600);
+            }
+        }
+
+        function triggerQuizModal() {
+            gameState = 'QUIZ';
+            const quiz = QUIZ_DATABASE[Math.floor(Math.random() * QUIZ_DATABASE.length)];
+            
+            document.getElementById('quiz-question').innerText = quiz.question;
+            const optionsContainer = document.getElementById('quiz-options');
+            const expContainer = document.getElementById('quiz-explanation');
+            const nextBtn = document.getElementById('quiz-next-btn');
+
+            optionsContainer.innerHTML = '';
+            expContainer.classList.add('hidden');
+            nextBtn.classList.add('hidden');
+
+            quiz.options.forEach((opt, idx) => {
+                const btn = document.createElement('button');
+                btn.className = "w-full text-left p-3.5 rounded-xl bg-slate-800/90 border border-slate-700 hover:border-amber-400 text-xs md:text-sm transition-all";
+                btn.innerText = `${idx + 1}. ${opt}`;
+                btn.onclick = () => {
+                    const allBtns = optionsContainer.querySelectorAll('button');
+                    allBtns.forEach(b => b.disabled = true);
+
+                    if (idx === quiz.answer) {
+                        btn.className = "w-full text-left p-3.5 rounded-xl bg-emerald-950 border-2 border-emerald-400 text-emerald-200 text-xs md:text-sm font-bold";
+                        score += 3;
+                        createScorePopup("+3 QUIZ ATP!");
+                        sound.playRunScore();
+                        updateHUD();
+                    } else {
+                        btn.className = "w-full text-left p-3.5 rounded-xl bg-pink-950 border-2 border-pink-500 text-pink-200 text-xs md:text-sm font-bold";
+                        allBtns[quiz.answer].className = "w-full text-left p-3.5 rounded-xl bg-emerald-950 border-2 border-emerald-400 text-emerald-200 text-xs md:text-sm font-bold";
+                        sound.playStrike();
+                    }
+
+                    expContainer.innerHTML = quiz.explanation;
+                    expContainer.classList.remove('hidden');
+                    nextBtn.classList.remove('hidden');
+                };
+                optionsContainer.appendChild(btn);
+            });
+
+            nextBtn.onclick = () => {
+                quizModal.classList.add('hidden');
+                prepareNextPitch();
+            };
+
+            quizModal.classList.remove('hidden');
+        }
+
+        // 🏃‍♂️ [순차 출루 알고리즘 (1루 -> 2루 -> 3루 -> 홈)]
+        function advanceRunners(hitType) {
+            let nextBases = [false, false, false];
+            activeRunners = [];
+
+            // 타자의 진루 (0 = 홈)
+            activeRunners.push(new ActiveRunner(0, hitType));
+            if (hitType < 4) {
+                nextBases[hitType - 1] = true;
+            }
+
+            // 기존 선행 주자들의 순차 진루
+            for (let b = 2; b >= 0; b--) {
+                if (bases[b]) {
+                    const startBase = b + 1; // 1, 2, 3루
+                    const targetBase = startBase + hitType;
+                    activeRunners.push(new ActiveRunner(startBase, targetBase));
+                    if (targetBase <= 3) {
+                        nextBases[targetBase - 1] = true;
+                    }
+                }
+            }
+            bases = nextBases;
+        }
+
+        function createScorePopup(txt = "+1 ATP RUN!") {
+            scorePopups.push({ x: getWidth() / 2, y: getHeight() * 0.7, vy: -1.8, alpha: 1.0, text: txt });
+        }
+
+        function registerStrike(reason = "스트라이크!") {
+            wickets++;
+            sound.playStrike();
+            showFeedback(reason, 'text-pink-500');
+            updateHUD();
+            setTimeout(prepareNextPitch, 1900);
+        }
+
+        function registerBall(reason = "볼!") {
+            ballsCount++;
+            sound.playBall();
+            showFeedback(reason, 'text-emerald-400');
+
+            if (ballsCount >= 4) {
+                ballsCount = 0;
+                let nextBases = [...bases];
+                activeRunners = [];
+                activeRunners.push(new ActiveRunner(0, 1));
+                nextBases[0] = true;
+
+                if (bases[0]) {
+                    activeRunners.push(new ActiveRunner(1, 2)); nextBases[1] = true;
+                    if (bases[1]) {
+                        activeRunners.push(new ActiveRunner(2, 3)); nextBases[2] = true;
+                        if (bases[2]) activeRunners.push(new ActiveRunner(3, 4));
+                    }
+                }
+                bases = nextBases;
+                showFeedback("포볼! (출루)", 'text-amber-400');
+            }
+            updateHUD();
+            setTimeout(prepareNextPitch, 2200);
+        }
+
+        function updateHUD() {
+            scoreEl.innerText = score;
+            ballsEl.innerHTML = `${ballsCount} <span class="text-xs text-slate-600">/ 4</span>`;
+            wicketsEl.innerHTML = `${wickets} <span class="text-xs text-slate-600">/ 3</span>`;
+            updateBaseUI(base1El, bases[0]);
+            updateBaseUI(base2El, bases[1]);
+            updateBaseUI(base3El, bases[2]);
+
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('cell_cricket_hi', highScore);
+                highScoreEl.innerText = highScore;
+            }
+        }
+
+        function updateBaseUI(el, occupied) {
+            if (occupied) {
+                el.className = "absolute w-2.5 h-2.5 rotate-45 bg-amber-400 border border-amber-300 shadow-[0_0_10px_rgba(255,180,0,0.9)] transition-all duration-300 scale-110";
+            } else {
+                el.className = "absolute w-2.5 h-2.5 rotate-45 border border-cyan-500/40 bg-slate-900 transition-all duration-300";
+            }
+        }
+
+        function showFeedback(text, colorClass) {
+            feedbackTextEl.innerText = text;
+            hitFeedbackEl.className = `absolute inset-0 flex items-center justify-center pointer-events-none transition-opacity duration-300 opacity-100 ${colorClass}`;
+            setTimeout(() => { hitFeedbackEl.classList.add('opacity-0'); }, 1250);
+        }
+
+        function endGame() {
+            gameState = 'GAMEOVER';
+            finalScoreEl.innerText = score;
+            finalHighscoreEl.innerText = highScore;
+            gameoverOverlay.classList.remove('hidden');
+        }
+
+        function createOrganelleExplosion(x, y, count, color) {
+            for (let i = 0; i < count; i++) {
+                const angle = Math.random() * Math.PI * 2, speed = 2 + Math.random() * 8;
+                particles.push({ x: x, y: y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 2, size: 3 + Math.random() * 5, color: color, alpha: 1.0 });
+            }
+        }
+
+        function gameLoop() {
+            update(); render(); requestAnimationFrame(gameLoop);
+        }
+
+        function update() {
+            microfilaments.forEach(m => {
+                m.x1 += m.speed; m.x2 += m.speed;
+                if (m.x1 > getWidth() + 200) m.x1 = -200;
+                if (m.x2 > getWidth() + 200) m.x2 = -200;
+            });
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx; p.y += p.vy; p.vy += 0.15; p.alpha -= 0.02;
+                if (p.alpha <= 0) particles.splice(i, 1);
+            }
+
+            activeRunners.forEach(runner => runner.update());
+
+            for (let i = scorePopups.length - 1; i >= 0; i--) {
+                const pop = scorePopups[i];
+                pop.y += pop.vy; pop.alpha -= 0.015;
+                if (pop.alpha <= 0) scorePopups.splice(i, 1);
+            }
+
+            if (gameState === 'PITCHING') {
+                if (ball.active) {
+                    ball.progress += ball.speed;
+                    ball.z = PITCHER_DISTANCE_Z - (PITCHER_DISTANCE_Z - 70) * ball.progress;
+                    ball.x = Math.sin(ball.progress * Math.PI) * currentPitch.curveX;
+                    ball.y = 110 - Math.sin(ball.progress * Math.PI) * 45;
+
+                    ball.trail.push({ x: ball.x, y: ball.y, z: ball.z });
+                    if (ball.trail.length > 15) ball.trail.shift();
+
+                    if (ball.z <= 70) {
+                        ball.active = false;
+                        if (currentPitch.isStrike) registerStrike("스트라이크! (미타격)");
+                        else registerBall("볼!");
+                    }
+                } else if (ball.hit) {
+                    ball.x += ball.hitVX;
+                    ball.y += ball.hitVY;
+                    ball.z += ball.hitVZ;
+                    ball.hitVY -= 0.65;
+
+                    ball.trail.push({ x: ball.x, y: ball.y, z: ball.z });
+                    if (ball.trail.length > 25) ball.trail.shift();
+                }
+            }
+
+            if (bat.isSwinging) {
+                bat.swingProgress += 0.12;
+                bat.angle = Math.sin(bat.swingProgress * Math.PI) * 2.2;
+                if (bat.swingProgress >= 1) { bat.isSwinging = false; bat.angle = 0; }
+            }
+        }
+
+        function render() {
+            const width = getWidth(), height = getHeight();
+            ctx.clearRect(0, 0, width, height);
+            drawCellularBackground(width, height);
+            draw3DPitchAndField(width, height);
+            drawBaseRunners();
+            drawPitcherOrganelle(width, height);
+            drawBall(width, height);
+            drawBatterAndBat(width, height);
+            drawParticles();
+            drawScorePopups();
+        }
+
+        function drawCellularBackground(w, h) {
+            const bgGrad = ctx.createRadialGradient(w / 2, h / 2, 50, w / 2, h / 2, w);
+            bgGrad.addColorStop(0, '#0a0d28'); bgGrad.addColorStop(0.6, '#040616'); bgGrad.addColorStop(1, '#020208');
+            ctx.fillStyle = bgGrad; ctx.fillRect(0, 0, w, h);
+
+            ctx.lineWidth = 1.5;
+            microfilaments.forEach(m => {
+                ctx.strokeStyle = `rgba(0, 240, 255, ${m.alpha})`;
+                ctx.beginPath(); ctx.moveTo(m.x1, m.y1); ctx.lineTo(m.x2, m.y2); ctx.stroke();
+            });
+        }
+
+        function draw3DPitchAndField(w, h) {
+            const home = project3D(BASE_POSITIONS[0].x, BASE_POSITIONS[0].y, BASE_POSITIONS[0].z);
+            const b1 = project3D(BASE_POSITIONS[1].x, BASE_POSITIONS[1].y, BASE_POSITIONS[1].z);
+            const b2 = project3D(BASE_POSITIONS[2].x, BASE_POSITIONS[2].y, BASE_POSITIONS[2].z);
+            const b3 = project3D(BASE_POSITIONS[3].x, BASE_POSITIONS[3].y, BASE_POSITIONS[3].z);
+
+            // 💎 야구 다이아몬드 그리기 (홈 -> 1루 -> 2루 -> 3루 -> 홈)
+            ctx.beginPath();
+            ctx.moveTo(home.x, home.y);
+            ctx.lineTo(b1.x, b1.y);
+            ctx.lineTo(b2.x, b2.y);
+            ctx.lineTo(b3.x, b3.y);
+            ctx.closePath();
+            
+            ctx.fillStyle = 'rgba(15, 30, 60, 0.65)'; 
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(0, 229, 255, 0.6)'; 
+            ctx.lineWidth = 3; 
+            ctx.stroke();
+
+            // 🎯 마운드 중심선 (홈 -> 마운드)
+            const pitcherPos = project3D(0, 0, PITCHER_DISTANCE_Z);
+            ctx.beginPath(); 
+            ctx.moveTo(home.x, home.y); 
+            ctx.lineTo(pitcherPos.x, pitcherPos.y);
+            ctx.strokeStyle = 'rgba(255, 140, 0, 0.4)'; 
+            ctx.setLineDash([6, 6]); 
+            ctx.lineWidth = 2; 
+            ctx.stroke(); 
+            ctx.setLineDash([]);
+
+            // 📍 1루, 2루, 3루, 홈 마커 그리기
+            drawSingleBaseMarker(home, '홈');
+            drawSingleBaseMarker(b1, '1루', bases[0]);
+            drawSingleBaseMarker(b2, '2루', bases[1]);
+            drawSingleBaseMarker(b3, '3루', bases[2]);
+        }
+
+        function drawSingleBaseMarker(pos, label, occupied = false) {
+            const size = 16 * pos.scale;
+            ctx.save();
+            ctx.translate(pos.x, pos.y); 
+            ctx.rotate(Math.PI / 4);
+
+            ctx.fillStyle = occupied ? '#ffb700' : '#092540';
+            ctx.strokeStyle = occupied ? '#ffffff' : '#00e5ff';
+            ctx.lineWidth = 2;
+            ctx.fillRect(-size / 2, -size / 2, size, size);
+            ctx.strokeRect(-size / 2, -size / 2, size, size);
+
+            if (occupied) {
+                ctx.shadowColor = '#ffb700';
+                ctx.shadowBlur = 15;
+                ctx.fillRect(-size / 2, -size / 2, size, size);
+            }
+            ctx.restore();
+
+            // 베이스 텍스트 라벨
+            ctx.fillStyle = occupied ? '#ffb700' : 'rgba(0, 229, 255, 0.7)';
+            ctx.font = `bold ${Math.max(10, 12 * pos.scale)}px Orbitron`;
+            ctx.textAlign = 'center';
+            ctx.fillText(label, pos.x, pos.y + size * 1.5);
+        }
+
+        function drawBaseRunners() {
+            activeRunners.forEach(runner => {
+                const pos3D = runner.get3DPosition();
+                const proj = project3D(pos3D.x, pos3D.y, pos3D.z);
+                const size = 16 * proj.scale;
+                
+                ctx.fillStyle = '#ff9900';
+                ctx.shadowColor = '#ff6600'; 
+                ctx.shadowBlur = 15 * proj.scale;
+
+                ctx.beginPath(); 
+                ctx.arc(proj.x, proj.y - size, size, 0, Math.PI * 2); 
+                ctx.fill();
+
+                ctx.fillStyle = '#ffffff'; 
+                ctx.font = `${Math.max(9, 11 * proj.scale)}px Orbitron`;
+                ctx.textAlign = 'center'; 
+                ctx.fillText('⚡ATP', proj.x, proj.y - size * 2.2);
+            });
+        }
+
+        function drawPitcherOrganelle(w, h) {
+            const proj = project3D(0, 45, PITCHER_DISTANCE_Z);
+            const size = 48 * proj.scale;
+            ctx.save(); 
+            ctx.translate(proj.x, proj.y);
+            ctx.shadowColor = currentPitch.shadowColor; 
+            ctx.shadowBlur = 35 * proj.scale;
+
+            const grad = ctx.createRadialGradient(0, 0, size * 0.2, 0, 0, size);
+            grad.addColorStop(0, '#ffffff'); 
+            grad.addColorStop(0.5, currentPitch.color); 
+            grad.addColorStop(1, 'rgba(0,0,0,0.8)');
+
+            ctx.fillStyle = grad; 
+            ctx.beginPath(); 
+            ctx.arc(0, 0, size, 0, Math.PI * 2); 
+            ctx.fill();
+
+            ctx.shadowBlur = 0; 
+            ctx.fillStyle = '#ffffff'; 
+            ctx.font = `bold ${Math.max(12, 16 * proj.scale)}px sans-serif`;
+            ctx.textAlign = 'center'; 
+            ctx.textBaseline = 'middle';
+            ctx.fillText(currentPitch.organelle.split(' ')[0], 0, 0);
+            ctx.restore();
+        }
+
+        function drawBall(w, h) {
+            if (!ball.active && !ball.hit) return;
+            if (ball.trail.length > 1) {
+                ctx.beginPath();
+                for (let i = 0; i < ball.trail.length; i++) {
+                    const pt = project3D(ball.trail[i].x, ball.trail[i].y, ball.trail[i].z);
+                    if (i === 0) ctx.moveTo(pt.x, pt.y); 
+                    else ctx.lineTo(pt.x, pt.y);
+                }
+                ctx.strokeStyle = currentPitch.tailColor;
+                ctx.lineWidth = 6 * project3D(ball.x, ball.y, ball.z).scale;
+                ctx.stroke();
+            }
+
+            const proj = project3D(ball.x, ball.y, ball.z);
+            const radius = Math.max(3, 18 * proj.scale);
+            ctx.save();
+            ctx.shadowColor = currentPitch.shadowColor; 
+            ctx.shadowBlur = 20 * proj.scale;
+            ctx.fillStyle = currentPitch.color;
+            ctx.beginPath(); 
+            ctx.arc(proj.x, proj.y, radius, 0, Math.PI * 2); 
+            ctx.fill();
+
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath(); 
+            ctx.arc(proj.x - radius * 0.3, proj.y - radius * 0.3, radius * 0.35, 0, Math.PI * 2); 
+            ctx.fill();
+            ctx.restore();
+        }
+
+        function drawBatterAndBat(w, h) {
+            const home = project3D(0, 0, 70);
+            ctx.save(); 
+            ctx.translate(home.x, home.y + 20);
+
+            const coreRadius = 24;
+            ctx.shadowColor = 'rgba(0, 229, 255, 0.8)'; 
+            ctx.shadowBlur = 25;
+
+            const nucGrad = ctx.createRadialGradient(0, -35, 4, 0, -35, coreRadius);
+            nucGrad.addColorStop(0, '#ffffff'); 
+            nucGrad.addColorStop(0.6, '#00d2ff'); 
+            nucGrad.addColorStop(1, '#0044ff');
+
+            ctx.fillStyle = nucGrad; 
+            ctx.beginPath(); 
+            ctx.arc(0, -35, coreRadius, 0, Math.PI * 2); 
+            ctx.fill();
+
+            ctx.save(); 
+            ctx.translate(-10, -35); 
+            ctx.rotate(-0.6 + bat.angle);
+            ctx.fillStyle = '#ffaa00'; 
+            ctx.shadowColor = '#ff6600'; 
+            ctx.shadowBlur = 15;
+            ctx.fillRect(-4, -55, 8, 55);
+            ctx.fillStyle = '#ffffff'; 
+            ctx.fillRect(-2, -50, 4, 15);
+            ctx.restore(); 
+            ctx.restore();
+        }
+
+        function drawParticles() {
+            particles.forEach(p => {
+                ctx.save(); 
+                ctx.globalAlpha = Math.max(0, p.alpha); 
+                ctx.fillStyle = p.color;
+                ctx.shadowColor = p.color; 
+                ctx.shadowBlur = 10;
+                ctx.beginPath(); 
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); 
+                ctx.fill();
+                ctx.restore();
+            });
+        }
+
+        function drawScorePopups() {
+            scorePopups.forEach(pop => {
+                ctx.save(); 
+                ctx.globalAlpha = Math.max(0, pop.alpha);
+                ctx.font = '900 22px Orbitron, sans-serif'; 
+                ctx.fillStyle = '#ffcc00';
+                ctx.shadowColor = '#ff6600'; 
+                ctx.shadowBlur = 15;
+                ctx.textAlign = 'center'; 
+                ctx.fillText(pop.text, pop.x, pop.y);
+                ctx.restore();
+            });
+        }
+    </script>
+</body>
+</html>
